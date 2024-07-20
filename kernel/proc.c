@@ -141,6 +141,8 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+  p->syscall_trace = 0;
+
   return p;
 }
 
@@ -304,6 +306,8 @@ fork(void)
   safestrcpy(np->name, p->name, sizeof(p->name));
 
   pid = np->pid;
+
+  np->syscall_trace = p->syscall_trace;
 
   release(&np->lock);
 
