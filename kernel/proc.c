@@ -658,3 +658,15 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64 proc_num_used(void) {
+  int count = 0;
+  for (int i = 0; i < NPROC; i++) {
+      acquire(&(proc[i].lock));
+      if (proc[i].state != UNUSED) {
+          count += 1;
+      }
+      release(&(proc[i].lock));
+  }
+  return count;
+}
