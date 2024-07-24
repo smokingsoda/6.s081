@@ -382,7 +382,6 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     if(n > len)
       n = len;
     memmove(dst, (void *)(pa0 + (srcva - va0)), n);
-
     len -= n;
     dst += n;
     srcva = va0 + PGSIZE;

@@ -77,10 +77,54 @@ sys_sleep(void)
 
 
 #ifdef LAB_PGTBL
-int
+uint64
 sys_pgaccess(void)
 {
-  // lab pgtbl: your code here.
+  // Parse arguments
+  pagetable_t pagetable = myproc()->pagetable;
+  pagetable_t proc_pagetable = pagetable;
+  uint64 return_bit = 0;
+  uint64 va;
+  int length;
+  uint64 mask_addr;
+  if (argaddr(0, &va) < 0 || argaddr(2, &mask_addr) < 0 || argint(1, &length) || length > 64) {
+      return -1;
+  }
+
+  // Walk the pagetable to check the PTE_A bit
+  // First I need to convert the va to pa which is pointing to the first page
+  // in the physical memory
+  for (int level = 2; level > 0; level --) {
+      pte_t *pte = &pagetable[PX(level, va)];
+      if (*pte & PTE_V) {
+          pagetable = (pagetable_t) PTE2PA(*pte);
+      } else {
+          return -1;
+      }
+  }
+
+  // Check whether the iteration won't touch the top of the level 0 pagetable
+  int current = PX(0, va);
+  if (current + length > 512) {
+    return -1;
+  }
+
+  // Now pagetable is the level 0 pagetable, and we need to get 
+  // the starting pte according to the va
+  // Now we want to do iteration
+  for (int i = 0; i < length; i++) {
+      if (pagetable[current + i] & PTE_A) {
+          //printf("page %p is accessed, then set the bit to zero\n", pagetable[current + i]);
+          return_bit = return_bit | (1 << i);
+          // Reset the PTE_A
+          pagetable[current + i] = pagetable[current + i] ^ PTE_A;
+      }
+  }
+  //printf("now return bit is %p\n", return_bit);
+  // Now copyout the returnbit
+  if (copyout(proc_pagetable, mask_addr, (char *) &return_bit, sizeof(uint64)) < 0){
+    return -1;
+  }
   return 0;
 }
 #endif

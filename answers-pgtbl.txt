@@ -1,0 +1,8 @@
+1.We can speed up fork(), so the child process can access USYSCALL directly rather than 
+switch to the kernel space
+
+2.The output of vmprint is the virtual memory diagram of the process
+page0: data and text of process
+page1: guard page for protect stack by page0 overflow
+page2: stack of process
+page3 to the last page: heap, trapfram, trampoline
