@@ -1,0 +1,11 @@
+1.a0, a1, a2, a2 holds 13 to call printf as its third arguments
+
+2.line 46 in call.asm inlines two function calls, which main calls f while f calls g
+
+3.0x628
+
+4.ra = 0x38
+
+5.He110, World, i should be 0x726c6400
+
+6.Some garbage number would be printed because a2 is not assigned.
