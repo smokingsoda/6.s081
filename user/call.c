@@ -11,13 +11,12 @@ int f(int x) {
   return g(x);
 }
 
-int *h(void) {
-  int *a = malloc(3 * sizeof(int));
-  a[0] = 1;
-  return a;
+void h(void) {
+  printf("嘿！！！！我在这！");
 }
 
 void main(void) {
   printf("%d %d\n", f(8)+1, 13);
+  h();
   exit(0);
 }
