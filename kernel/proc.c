@@ -232,6 +232,7 @@ userinit(void)
   
   // allocate one user page and copy init's instructions
   // and data into it.
+  // printf("size of initcode is %d\n", sizeof(initcode));
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
@@ -280,7 +281,7 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
-
+  // printf("p is %s, sz is %d\n", p->name, p->sz);
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);

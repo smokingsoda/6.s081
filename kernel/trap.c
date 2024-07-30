@@ -67,9 +67,37 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (r_scause() == 0xf) {
+    // Read the stval register, which stores the va that can't be translated
+    uint64 va = r_stval();
+    pagetable_t pagetable = p->pagetable;
+    pte_t *pte = walk(pagetable, va, 0);
+    if (pte == 0) {
+      printf("usertrap()1: unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    } else {
+      uint64 pa = PTE2PA(*pte);
+      uint64 flag = *pte & PTE_COW;
+      if (flag) {
+        // This pte is pointing to a COW page, so kalloc
+        char *mem;
+        if ((mem = kalloc()) == 0) {
+          printf("usertrap()2: unexpected scause %p pid=%d\n", r_scause(), p->pid);
+          printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+          p->killed = 1;
+        } 
+        memmove(mem, (char*)pa, PGSIZE);
+        kfree((char *)pa);
+        *pte = *pte | PTE_W;
+      } else {
+        // This pte is not pointing to a COW page, so change the PTE_W
+        *pte = *pte | PTE_W;
+      }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+    printf("            sepc=%p stval=%p name=%s\n", r_sepc(), r_stval(), p->name);
     p->killed = 1;
   }
 
