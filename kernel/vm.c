@@ -177,7 +177,6 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
     if((*pte & PTE_V) == 0)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
-      // continue;
       panic("uvmunmap: not a leaf");
     if(do_free){
       uint64 pa = PTE2PA(*pte);
@@ -304,33 +303,27 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  // char *mem;
-  // printf("old pagetable: %p, new pagetable: %p\n", old, new);
+  char *mem;
+
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    // printf("Previous va is %p, *pte is %p\n", i, *pte);
-    if (*pte & PTE_W) {
-      *pte = *pte & ~PTE_W & ~PTE_COW;
-    }
-    // printf("Later va is %p, *pte is %p\n", i, *pte);
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte) | PTE_COW;
-    // Here we don't want to allocate any memory
-    lazy_kalloc((char*)pa);
-    //   goto err;
-    // memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
-      //kfree(mem);
+    flags = PTE_FLAGS(*pte);
+    if((mem = kalloc()) == 0)
+      goto err;
+    memmove(mem, (char*)pa, PGSIZE);
+    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
+      kfree(mem);
       goto err;
     }
   }
   return 0;
 
  err:
-  uvmunmap(new, 0, i / PGSIZE, 0);
+  uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
 
