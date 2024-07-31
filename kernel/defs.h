@@ -63,8 +63,9 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
-void            grow_ref(void *, uint64);
+int             grow_ref(void *, uint64);
 uint64          get_ref(void *);
+// void            fake_kfree(void *);
 
 
 // log.c
@@ -174,6 +175,7 @@ int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 pte_t *         walk(pagetable_t, uint64, int);
+int             cow(pagetable_t, uint64 );
 
 // plic.c
 void            plicinit(void);

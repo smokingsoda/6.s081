@@ -132,12 +132,17 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa,
     a = PGROUNDDOWN(va);
     last = PGROUNDDOWN(va + size - 1);
     for (;;) {
+        // printf("a %p walk %p\n", a, *walk(pagetable, a, 1));
+        // printf("va %p walk %p\n", va, *walk(pagetable, va, 1));
         if ((pte = walk(pagetable, a, 1)) == 0)
             return -1;
-        if (*pte & PTE_V)
+        // printf("*pte is %p, cpu is %d\n", *pte, cpuid());
+        if (*pte & PTE_V) {
+            // printf("About to panic, va is %p, *pte is %p\n", va, *pte);
             panic("mappages: remap");
+        }
         *pte = PA2PTE(pa) | perm | PTE_V;
-        if (a == last)
+        if (a >= last)
             break;
         a += PGSIZE;
         pa += PGSIZE;
@@ -316,9 +321,10 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len) {
 
     while (len > 0) {
         va0 = PGROUNDDOWN(dstva);
-        pa0 = walkaddr(pagetable, va0);
-        if (pa0 == 0)
+        if (cow(pagetable, va0) < 0)
             return -1;
+        pa0 = walkaddr(pagetable, va0);
+
         n = PGSIZE - (dstva - va0);
         if (n > len)
             n = len;
@@ -389,6 +395,42 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max) {
         srcva = va0 + PGSIZE;
     }
     if (got_null) {
+        return 0;
+    } else {
+        return -1;
+    }
+}
+
+int cow(pagetable_t pagetable, uint64 va) {
+    if (va >= MAXVA)
+        return -1;
+    pte_t *pte = walk(pagetable, va, 0);
+    if (pte == 0 || (*pte & (PTE_V)) == 0 || (*pte & PTE_U) == 0)
+        return -1;
+    va = PGROUNDDOWN(va);
+    uint64 pa = PTE2PA(*pte);
+    uint flags = PTE_FLAGS(*pte);
+    if (!(*pte & PTE_COW) && !(*pte & PTE_W))
+        return -1;
+    if (*pte & PTE_W || (*pte & PTE_COW) == 0)
+        return 0;
+    if (get_ref((void *)pa) > 1) {
+        char *mem;
+        if ((mem = kalloc()) == 0)
+            panic("no free mem to uncow");
+        memmove(mem, (char *)pa, PGSIZE);
+        uvmunmap(pagetable, PGROUNDDOWN(va), 1, 1);
+        //  fake_kfree((void *)pa);
+        flags &= ~PTE_COW;
+        flags |= PTE_W;
+        if (mappages(pagetable, va, PGSIZE, (uint64)mem, flags) != 0) {
+            kfree(mem);
+            return -1;
+        }
+        return 0;
+    } else if (get_ref((void *)pa) == 1) {
+        *pte &= ~PTE_COW;
+        *pte |= PTE_W;
         return 0;
     } else {
         return -1;

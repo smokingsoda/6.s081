@@ -57,40 +57,12 @@ void usertrap(void) {
         syscall();
     } else if ((which_dev = devintr()) != 0) {
         // ok
-    } else if (r_scause() == 15) {
+    } else if (r_scause() == 15 || r_scause() == 13) {
         uint64 va = r_stval();
-        pagetable_t pgtbl = p->pagetable;
-        uint64 *pte = walk(pgtbl, va, 0);
-        uint flag = PTE_FLAGS(*pte);
-        if ((*pte & PTE_COW) == 0) {
-            goto err;
+        if (cow(p->pagetable, va) < 0) {
+            // panic("page fault cow failed");
+            p->killed = 1;
         }
-        uint64 pa = PTE2PA(*pte);
-        uint64 ref = get_ref((void *)pa);
-        if (ref == 1) {
-            *pte = *pte | PTE_W;
-        } else if (ref > 1) {
-            // Copy on write
-            char *mem;
-            if ((mem = kalloc()) == 0) {
-                p->killed = 1;
-            } else {
-                memmove(mem, (char *)pa, PGSIZE);
-                if (mappages(pgtbl, va, PGSIZE, (uint64)mem,
-                             (flag | PTE_W) & ~PTE_COW) != 0) {
-                    kfree(mem);
-                    p->killed = 1;
-                } else {
-                    grow_ref((void *)pa, -1);
-                }
-            }
-        } else {
-            goto err;
-        }
-    err:
-        printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-        printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-        p->killed = 1;
     } else {
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
         printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
@@ -165,7 +137,8 @@ void kerneltrap() {
 
     if ((which_dev = devintr()) == 0) {
         printf("scause %p\n", scause);
-        printf("sepc=%p stval=%p\n", r_sepc(), r_stval());
+        printf("sepc=%p stval=%p name=%s\n", r_sepc(), r_stval(),
+               myproc()->name);
         panic("kerneltrap");
     }
 
