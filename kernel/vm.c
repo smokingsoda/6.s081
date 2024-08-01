@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -293,7 +295,7 @@ int uvmcopy(pagetable_t old, pagetable_t new, uint64 sz) {
         if (mappages(new, i, PGSIZE, (uint64)pa, flags) != 0) {
             goto err;
         }
-        grow_ref((void *)pa, 1);
+        increment_ref((void *)pa);
     }
     return 0;
 
@@ -320,11 +322,12 @@ int copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len) {
     uint64 n, va0, pa0;
 
     while (len > 0) {
+        if (uvm_check_cowpage(dstva))
+            uvm_cow_copy(pagetable, dstva);
         va0 = PGROUNDDOWN(dstva);
-        if (cow(pagetable, va0) < 0)
-            return -1;
         pa0 = walkaddr(pagetable, va0);
-
+        if (pa0 == 0)
+            return -1;
         n = PGSIZE - (dstva - va0);
         if (n > len)
             n = len;
@@ -401,38 +404,14 @@ int copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max) {
     }
 }
 
-int cow(pagetable_t pagetable, uint64 va) {
-    if (va >= MAXVA)
-        return -1;
-    pte_t *pte = walk(pagetable, va, 0);
-    if (pte == 0 || (*pte & (PTE_V)) == 0 || (*pte & PTE_U) == 0)
-        return -1;
-    va = PGROUNDDOWN(va);
-    uint64 pa = PTE2PA(*pte);
-    uint flags = PTE_FLAGS(*pte);
-    if (!(*pte & PTE_COW) && !(*pte & PTE_W))
-        return -1;
-    if (*pte & PTE_W || (*pte & PTE_COW) == 0)
-        return 0;
-    if (get_ref((void *)pa) > 1) {
-        char *mem;
-        if ((mem = kalloc()) == 0)
-            panic("no free mem to uncow");
-        memmove(mem, (char *)pa, PGSIZE);
-        uvmunmap(pagetable, PGROUNDDOWN(va), 1, 1);
-        //  fake_kfree((void *)pa);
-        flags &= ~PTE_COW;
-        flags |= PTE_W;
-        if (mappages(pagetable, va, PGSIZE, (uint64)mem, flags) != 0) {
-            kfree(mem);
-            return -1;
-        }
-        return 0;
-    } else if (get_ref((void *)pa) == 1) {
-        *pte &= ~PTE_COW;
-        *pte |= PTE_W;
-        return 0;
-    } else {
-        return -1;
-    }
+// Check if a given virtual address points to a copy-on-write page
+int uvm_check_cowpage(uint64 va) {
+    pte_t *pte;
+    struct proc *p = myproc();
+
+    return va < p->sz // within size of memory for the process
+           && ((pte = walk(p->pagetable, va, 0)) != 0) &&
+           (*pte & PTE_V)       // page table entry exists
+           && (*pte & PTE_COW); // page is a cow page
 }
+

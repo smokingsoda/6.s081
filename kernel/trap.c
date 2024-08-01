@@ -57,16 +57,16 @@ void usertrap(void) {
         syscall();
     } else if ((which_dev = devintr()) != 0) {
         // ok
-    } else if (r_scause() == 15 || r_scause() == 13) {
+    } else if ((r_scause() == 15 || r_scause() == 13) && uvm_check_cowpage(r_stval())) {
         uint64 va = r_stval();
-        if (cow(p->pagetable, va) < 0) {
+        if (uvm_cow_copy(p->pagetable, va) < 0) {
             // panic("page fault cow failed");
-            p->killed = 1;
+            kill(p->pid);
         }
     } else {
         printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
         printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-        p->killed = 1;
+        kill(p->pid);
     }
 
     if (p->killed)

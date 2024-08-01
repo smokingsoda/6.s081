@@ -38,9 +38,6 @@ void freerange(void *pa_start, void *pa_end) {
     char *p;
     p = (char *)PGROUNDUP((uint64)pa_start);
     for (; p + PGSIZE <= (char *)pa_end; p += PGSIZE) {
-        acquire(&ref_count.lock);
-        ref_count.ref[(uint64)p / PGSIZE] = 0;
-        release(&ref_count.lock);
         kfree(p);
     }
 }
@@ -57,7 +54,8 @@ void kfree(void *pa) {
         panic("kfree");
     }
     acquire(&ref_count.lock);
-    if (ref_count.ref[(uint64)pa / PGSIZE] <= 1) {
+    ref_count.ref[(uint64)pa / PGSIZE] -= 1;
+    if (ref_count.ref[(uint64)pa / PGSIZE] <= 0) {
         // Fill with junk to catch dangling refs.
         memset(pa, 1, PGSIZE);
 
@@ -66,12 +64,8 @@ void kfree(void *pa) {
         acquire(&kmem.lock);
         r->next = kmem.freelist;
         kmem.freelist = r;
+        release(&kmem.lock);
         ref_count.ref[(uint64)pa / PGSIZE] = 0;
-        release(&kmem.lock);
-    } else if (ref_count.ref[(uint64)pa / PGSIZE] > 1) {
-        acquire(&kmem.lock);
-        ref_count.ref[(uint64)pa / PGSIZE] -= 1;
-        release(&kmem.lock);
     }
     release(&ref_count.lock);
 }
@@ -88,60 +82,57 @@ void *kalloc(void) {
         kmem.freelist = r->next;
     release(&kmem.lock);
 
-    if (r)
-        memset((char *)r, 5, PGSIZE); // fill with junk
-
-    acquire(&ref_count.lock);
     if (r) {
+        memset((char *)r, 5, PGSIZE); // fill with junk
         ref_count.ref[(uint64)r / PGSIZE] = 1;
     }
-    release(&ref_count.lock);
     return (void *)r;
 }
 
-int grow_ref(void *pa, uint64 count) {
+void increment_ref(void *pa) {
     if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end || (uint64)pa >= PHYSTOP)
-        return -1;
+        return;
     acquire(&ref_count.lock);
-    ref_count.ref[(uint64)pa / PGSIZE] += count;
+    ref_count.ref[(uint64)pa / PGSIZE] += 1;
     release(&ref_count.lock);
+}
+
+int uvm_cow_copy(pagetable_t pagetable, uint64 va) {
+    pte_t *pte;
+    if ((pte = walk(pagetable, va, 0)) == 0) {
+        panic("uvmcowcopy: walk");
+    }
+    va = PGROUNDDOWN(va);
+    uint64 pa = PTE2PA(*pte);
+    uint64 new_pa = (uint64)kcopy_n_deref((void *)pa);
+    if (new_pa == 0) {
+        return -1;
+    }
+
+    uint64 flag = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+    uvmunmap(pagetable, PGROUNDDOWN(va), 1, 0);
+    if (mappages(pagetable, va, 1, new_pa, flag) == -1) {
+        panic("uvmcowcopy: mappages");
+    }
     return 0;
 }
 
-uint64 get_ref(void *pa) {
-    uint64 ref;
+void *kcopy_n_deref(void *pa) {
     acquire(&ref_count.lock);
-    ref = ref_count.ref[(uint64)pa / PGSIZE];
+
+    if (ref_count.ref[(uint64)pa / PGSIZE] <= 1) {
+        release(&ref_count.lock);
+        return pa;
+    }
+
+    uint64 new_pa = (uint64)kalloc();
+    if (new_pa == 0) {
+        release(&ref_count.lock);
+        return 0; // out of memory
+    }
+    memmove((void *)new_pa, (void *)pa, PGSIZE);
+    ref_count.ref[(uint64)pa / PGSIZE] -= 1;
+
     release(&ref_count.lock);
-    return ref;
+    return (void *)new_pa;
 }
-
-// void fake_kfree(void *pa) {
-//     struct run *r;
-
-//     if (((uint64)pa % PGSIZE) != 0 || (char *)pa < end ||
-//         (uint64)pa >= PHYSTOP) {
-//         panic("kfree");
-//     }
-//     uint64 a = get_ref((void *)pa);
-//     uint64 b = ref_count.ref[(uint64)pa / PGSIZE];
-//     acquire(&ref_count.lock);
-//     if (ref_count.ref[(uint64)pa / PGSIZE] <= 1) {
-//         // Fill with junk to catch dangling refs.
-//         printf("get_ref(before) is %d, ref_count.ref[](before) is %d\n", a, b);
-//         memset(pa, 1, PGSIZE);
-
-//         r = (struct run *)pa;
-
-//         acquire(&kmem.lock);
-//         r->next = kmem.freelist;
-//         kmem.freelist = r;
-//         ref_count.ref[(uint64)pa / PGSIZE] = 0;
-//         release(&kmem.lock);
-//     } else if (ref_count.ref[(uint64)pa / PGSIZE] > 1) {
-//         acquire(&kmem.lock);
-//         ref_count.ref[(uint64)pa / PGSIZE] -= 1;
-//         release(&kmem.lock);
-//     }
-//     release(&ref_count.lock);
-// }
