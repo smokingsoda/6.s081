@@ -59,7 +59,7 @@ void usertrap(void) {
         // ok
     } else if ((r_scause() == 15 || r_scause() == 13) && uvm_check_cowpage(r_stval())) {
         uint64 va = r_stval();
-        if (uvm_cow_copy(p->pagetable, va) < 0) {
+        if (uvm_cow_copy(p->pagetable, va) == -1) {
             // panic("page fault cow failed");
             kill(p->pid);
         }

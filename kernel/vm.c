@@ -415,3 +415,25 @@ int uvm_check_cowpage(uint64 va) {
            && (*pte & PTE_COW); // page is a cow page
 }
 
+
+int uvm_cow_copy(pagetable_t pagetable, uint64 va) {
+  pte_t *pte;
+
+  if((pte = walk(pagetable, va, 0)) == 0)
+    panic("uvmcowcopy: walk");
+  
+  // copy the cow page
+  // (no copying will take place if reference count is already 1)
+  uint64 pa = PTE2PA(*pte);
+  uint64 new = (uint64)kcopy_n_deref((void*)pa);
+  if(new == 0)
+    return -1;
+  
+  // map as writable, remove the cow flag
+  uint64 flags = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+  uvmunmap(pagetable, PGROUNDDOWN(va), 1, 0);
+  if(mappages(pagetable, va, 1, new, flags) == -1) {
+    panic("uvmcowcopy: mappages");
+  }
+  return 0;
+}
