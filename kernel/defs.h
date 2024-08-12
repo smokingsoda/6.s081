@@ -67,6 +67,7 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+void*           steal(int id);
 
 // log.c
 void            initlog(int, struct superblock*);
