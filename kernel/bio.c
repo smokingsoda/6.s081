@@ -21,6 +21,7 @@
 #include "defs.h"
 #include "fs.h"
 #include "buf.h"
+#include "proc.h"
 
 #define TABLE_SIZE 13
 
@@ -32,14 +33,10 @@ struct {
     // head.next is most recent, head.prev is least.
     struct buf *table[TABLE_SIZE];
     struct spinlock table_lock[TABLE_SIZE];
-    struct buf *unused_buf;
-    struct spinlock unused_buf_lock;
 
 } bcache;
 
 void binit(void) {
-
-    initlock(&bcache.unused_buf_lock, "bcache");
 
     // Create linked list of buffers
     for (int i = 0; i < TABLE_SIZE; i++) {
@@ -49,20 +46,20 @@ void binit(void) {
     for (int i = 0; i < NBUF; i++) {
         initsleeplock(&bcache.buf[i].lock, "bcache");
     }
-    acquire(&bcache.unused_buf_lock);
-    bcache.unused_buf = &bcache.buf[0];
-    bcache.unused_buf->next = 0;
+    acquire(&bcache.table_lock[0]);
+    bcache.table[0] = &bcache.buf[0];
     for (int i = 0; i < NBUF - 1; i++) {
-        bcache.buf[i + 1].next = bcache.unused_buf;
-        bcache.unused_buf = &bcache.buf[i + 1];
+        bcache.buf[i + 1].next = bcache.table[0];
+        bcache.table[0] = &bcache.buf[i + 1];
     }
-    release(&bcache.unused_buf_lock);
+    release(&bcache.table_lock[0]);
 }
 
 // Look through buffer cache for block on device dev.
 // If not found, allocate a buffer.
 // In either case, return locked buffer.
 static struct buf *bget(uint dev, uint blockno) {
+    printf("proc %d is looking up for block %d\n", myproc()->pid, blockno);
     struct buf *b = 0;
 
     // Is the block already cached?
@@ -75,29 +72,50 @@ static struct buf *bget(uint dev, uint blockno) {
             b->refcnt++;
             release(&bcache.table_lock[table_index]);
             acquiresleep(&b->lock);
+            printf("proc %d found block %d cached in bucket %d\n", myproc()->pid, blockno, table_index);
             return b;
         }
     }
 
     // Not cached.
     // Recycle the least recently used (LRU) unused buffer.
-    acquire(&bcache.unused_buf_lock);
-    if (bcache.unused_buf && bcache.unused_buf->refcnt == 0) {
-        b = bcache.unused_buf;
-        b->dev = dev;
-        b->blockno = blockno;
-        b->valid = 0;
-        b->refcnt = 1;
+    for (int i = 1; i < TABLE_SIZE; i++) {
+        int next_table_index = (i + table_index) % TABLE_SIZE;
+        acquire(&bcache.table_lock[next_table_index]);
+        struct buf *pre = bcache.table[next_table_index];
+        struct buf *cur = bcache.table[next_table_index];
+        int count = 0;
+        for (; cur != 0; cur = cur->next) {
+            if (cur && cur->refcnt == 0) {
+                b = cur;
+                if (cur == pre && cur->next == 0) {
+                    bcache.table[next_table_index] = 0;
+                } else if (cur == pre && cur->next != 0) {
+                    pre->next = cur->next->next;
+                } else {
+                    pre->next = cur->next;
+                }
+                b->next = bcache.table[table_index];
+                bcache.table[table_index] = b;
+                b->dev = dev;
+                b->blockno = blockno;
+                b->valid = 0;
+                b->refcnt = 1;
 
-        bcache.unused_buf = b->next;
-        struct buf *cur = bcache.table[table_index];
-        b->next = cur;
-        bcache.table[table_index] = b;
-        release(&bcache.unused_buf_lock);
-        release(&bcache.table_lock[table_index]);
-        acquiresleep(&b->lock);
-        return b;
+                release(&bcache.table_lock[table_index]);
+                release(&bcache.table_lock[next_table_index]);
+                acquiresleep(&b->lock);
+                printf("proc %d found block %d not cached in bucket %d\n", myproc()->pid, blockno, next_table_index);
+                return b;
+            } else {
+                pre = cur;
+            }
+            count += 1;
+        }
+        printf("bucket %d has %d buf\n", next_table_index, count);
+        release(&bcache.table_lock[next_table_index]);
     }
+
     panic("bget: no buffers");
 }
 
@@ -134,25 +152,8 @@ void brelse(struct buf *b) {
     b->refcnt--;
     if (b->refcnt == 0) {
         // no one is waiting for it.
-        acquire(&bcache.unused_buf_lock);
-        struct buf *pre = bcache.table[table_index];
-        struct buf *cur = bcache.table[table_index];
-        if (b == cur) {
-            bcache.table[table_index] = cur->next;
-        } else {
-            for (cur = cur->next; cur != 0;
-                 cur = cur->next) {
-                if (cur == b) {
-                    pre->next = cur->next;
-                    break;
-                } else {
-                    pre = cur;
-                }
-            }
-        }
-        b->next = bcache.unused_buf;
-        bcache.unused_buf = b;
-        release(&bcache.unused_buf_lock);
+        // Do nothing first.
+        // printf("Found, and the next pointer is %p\n", b->next);
     }
     release(&bcache.table_lock[table_index]);
 }
@@ -170,4 +171,3 @@ void bunpin(struct buf *b) {
     b->refcnt--;
     release(&bcache.table_lock[table_index]);
 }
-
