@@ -92,15 +92,18 @@ void *steal(int id) {
     struct run *r;
 
     push_off(); // Turn off the interrupt
-    for (int i = 0; i < NCPU; i++) {
-        if (i != id) {
-            r = kmem[i].freelist;
-            if (r) {
-                kmem[i].freelist = r->next;
-                break;
-            }
+    for (int i = 1; i < NCPU; i++) {
+        int next_cpu_id = (id + i) % NCPU;
+        acquire(&kmem[next_cpu_id].lock);
+        r = kmem[next_cpu_id].freelist;
+        if (r) {
+            kmem[next_cpu_id].freelist = r->next;
+        }
+        release(&kmem[next_cpu_id].lock);
+        if (r) {
+            break;
         }
     }
     pop_off(); // Turn on the interrupt
-    return (void *) r;
+    return (void *)r;
 }
