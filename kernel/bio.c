@@ -63,11 +63,11 @@ void binit(void) {
 // In either case, return locked buffer.
 static struct buf *bget(uint dev, uint blockno) {
 
-    for (int i = 0; i < NBUF; i++) {
-        printf("buf %d refers to block %d and it is in %d buckect\n", i,
-               bcache.buf[i].blockno, bcache.buf[i].intable);
-    }
-    printf("proc %d is looking up for block %d\n", myproc()->pid, blockno);
+    // for (int i = 0; i < NBUF; i++) {
+    //     printf("buf %d refers to block %d and it is in %d buckect\n", i,
+    //            bcache.buf[i].blockno, bcache.buf[i].intable);
+    // }
+    // printf("proc %d is looking up for block %d\n", myproc()->pid, blockno);
     struct buf *b = 0;
 
     // Is the block already cached?
@@ -80,8 +80,8 @@ static struct buf *bget(uint dev, uint blockno) {
             b->refcnt++;
             release(&bcache.table_lock[table_index]);
             acquiresleep(&b->lock);
-            printf("proc %d found block %d cached in bucket %d\n",
-            myproc()->pid, blockno, table_index);
+            // printf("proc %d found block %d cached in bucket %d\n",
+            // myproc()->pid, blockno, table_index);
             return b;
         }
     }
@@ -114,8 +114,8 @@ static struct buf *bget(uint dev, uint blockno) {
                 release(&bcache.table_lock[table_index]);
                 release(&bcache.table_lock[next_table_index]);
                 acquiresleep(&b->lock);
-                printf("proc %d found block %d not cached in bucket %d\n",
-                myproc()->pid, blockno, next_table_index);
+                // printf("proc %d found block %d not cached in bucket %d\n",
+                // myproc()->pid, blockno, next_table_index);
                 return b;
             } else {
                 pre = cur;
@@ -134,8 +134,8 @@ static struct buf *bget(uint dev, uint blockno) {
             b->intable = table_index;
             release(&bcache.table_lock[table_index]);
             acquiresleep(&b->lock);
-            printf("proc %d found block %d not cached in bucket %d\n",
-            myproc()->pid, blockno, table_index);
+            // printf("proc %d found block %d not cached in bucket %d\n",
+            // myproc()->pid, blockno, table_index);
             return b;
         }
     }
