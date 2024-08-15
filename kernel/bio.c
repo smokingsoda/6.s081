@@ -27,12 +27,13 @@
 
 struct {
     struct buf buf[NBUF];
-
+    char buf_lock_name[NBUF][16];
     // Linked list of all buffers, through prev/next.
     // Sorted by how recently the buffer was used.
     // head.next is most recent, head.prev is least.
     struct buf *table[TABLE_SIZE];
     struct spinlock table_lock[TABLE_SIZE];
+    char table_lock_name[TABLE_SIZE][16];
 
 } bcache;
 
@@ -40,22 +41,26 @@ void binit(void) {
 
     // Create linked list of buffers
     for (int i = 0; i < TABLE_SIZE; i++) {
-        initlock(&bcache.table_lock[i], "bcache");
+        snprintf(bcache.table_lock_name[i], sizeof(bcache.table_lock_name[i]),
+                 "bcache_t_%d", i);
+        initlock(&bcache.table_lock[i], bcache.table_lock_name[i]);
     }
 
     for (int i = 0; i < NBUF; i++) {
-        initsleeplock(&bcache.buf[i].lock, "bcache");
+        snprintf(bcache.buf_lock_name[i], sizeof(bcache.buf_lock_name[i]),
+                 "bcache_b_%d", i);
+        initsleeplock(&bcache.buf[i].lock, bcache.buf_lock_name[i]);
     }
-    acquire(&bcache.table_lock[1]);
+    acquire(&bcache.table_lock[0]);
     bcache.buf[0].next = 0;
-    bcache.table[1] = &bcache.buf[0];
-    bcache.table[1]->intable = 1;
+    bcache.table[0] = &bcache.buf[0];
+    bcache.table[0]->intable = 0;
     for (int i = 0; i < NBUF - 1; i++) {
-        bcache.buf[i + 1].next = bcache.table[1];
-        bcache.table[1] = &bcache.buf[i + 1];
-        bcache.table[1]->intable = 1;
+        bcache.buf[i + 1].next = bcache.table[0];
+        bcache.table[0] = &bcache.buf[i + 1];
+        bcache.table[0]->intable = 0;
     }
-    release(&bcache.table_lock[1]);
+    release(&bcache.table_lock[0]);
 }
 
 // Look through buffer cache for block on device dev.

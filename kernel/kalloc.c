@@ -21,11 +21,13 @@ struct run {
 struct {
     struct spinlock lock;
     struct run *freelist;
+    char lock_name[16];
 } kmem[NCPU];
 
 void kinit() {
     for (int i = 0; i < NCPU; i++) {
-        initlock(&kmem[i].lock, "kmem");
+        snprintf(kmem[i].lock_name, sizeof(kmem[i].lock_name), "kmem_%d", i);
+        initlock(&kmem[i].lock, kmem[i].lock_name);
     }
     freerange(end, (void *)PHYSTOP);
 }
