@@ -348,8 +348,7 @@ void iunlockput(struct inode *ip) {
 // Return the disk block address of the nth block in inode ip.
 // If there is no such block, bmap allocates one.
 static uint bmap(struct inode *ip, uint bn) {
-    uint addr;
-    // uint *a, *b;
+    uint addr, *a, *b;
     struct buf *bp, *bp_2;
 
     if (bn < NDIRECT) {
@@ -366,9 +365,9 @@ static uint bmap(struct inode *ip, uint bn) {
             ip->addrs[NDIRECT] = addr = balloc(ip->dev);
         }
         bp = bread(ip->dev, addr);
-        // a = (uint *)bp->data;
-        if ((addr = bp->data[bn]) == 0) {
-            bp->data[bn] = addr = balloc(ip->dev);
+        a = (uint *)bp->data;
+        if ((addr = a[bn]) == 0) {
+            a[bn] = addr = balloc(ip->dev);
             log_write(bp);
         }
         brelse(bp);
@@ -381,16 +380,16 @@ static uint bmap(struct inode *ip, uint bn) {
             ip->addrs[NDIRECT + 1] = addr = balloc(ip->dev);
         }
         bp = bread(ip->dev, addr);
-        // a = (uint *)bp->data; // First level
-        if ((addr = bp->data[bn / SINGLE_NINDIRECT]) == 0) {
-            bp->data[bn / SINGLE_NINDIRECT] = addr = balloc(ip->dev);
+        a = (uint *)bp->data; // First level
+        if ((addr = a[bn / SINGLE_NINDIRECT]) == 0) {
+            a[bn / SINGLE_NINDIRECT] = addr = balloc(ip->dev);
             log_write(bp);
         }
         brelse(bp);
         bp_2 = bread(ip->dev, addr);
-        // b = (uint *)bp_2->data;
-        if ((addr = bp_2->data[bn % SINGLE_NINDIRECT]) == 0) {
-            bp_2->data[bn % SINGLE_NINDIRECT] = addr = balloc(ip->dev);
+        b = (uint *)bp_2->data;
+        if ((addr = b[bn % SINGLE_NINDIRECT]) == 0) {
+            b[bn % SINGLE_NINDIRECT] = addr = balloc(ip->dev);
             log_write(bp_2);
         }
         brelse(bp_2);
