@@ -357,6 +357,8 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     if(n > len)
       n = len;
     memmove((void *)(pa0 + (dstva - va0)), src, n);
+    printf("pa0: %p, dstva: %p, va0: %p\n", pa0, dstva, va0);
+    printf("copyout %d bytes to %p\n", n, pa0 + (dstva - va0));
 
     len -= n;
     src += n;
