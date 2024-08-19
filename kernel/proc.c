@@ -164,7 +164,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
-  p->vma_ptr = 0;
+  for (int i = 0; i < VMANUM; i ++) {
+    p->vma[i].valid = VMAINVALID;
+  }
 }
 
 // Create a user page table for a given process,

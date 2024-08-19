@@ -57,6 +57,7 @@ kfree(void *pa)
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
+  printf("kfree pa %p\n", r);
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);

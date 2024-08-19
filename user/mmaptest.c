@@ -215,7 +215,6 @@ mmap_test(void)
     err("mmap mmap1");
   close(fd1);
   unlink("mmap1");
-
   int fd2;
   if((fd2 = open("mmap2", O_RDWR|O_CREATE)) < 0)
     err("open mmap2");
@@ -226,7 +225,7 @@ mmap_test(void)
     err("mmap mmap2");
   close(fd2);
   unlink("mmap2");
-
+  printf(p2);
   if(memcmp(p1, "12345", 5) != 0)
     err("mmap1 mismatch");
   if(memcmp(p2, "67890", 5) != 0)
