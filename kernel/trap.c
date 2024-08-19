@@ -106,11 +106,10 @@ void usertrap(void) {
             // printf("allocating %p, flag: %d\n", alloc_addr, flags);
             pages += PGSIZE;
         }
-        int a;
         acquiresleep(&ip->lock);
-        a = readi(ip, 1, vma->addr, 0, vma->length);
+        readi(ip, 1, vma->addr, 0, vma->length);
         releasesleep(&ip->lock);
-        printf("copy %d\n", a);
+
 
     } else {
     normal_page_fault:
