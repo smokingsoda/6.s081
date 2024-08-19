@@ -145,6 +145,17 @@ static void freeproc(struct proc *p) {
     if (p->trapframe)
         kfree((void *)p->trapframe);
     p->trapframe = 0;
+    for (int i = 0; i < VMAVALID; i++) {
+        if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
+            if ((p->vma[i].flags & MAP_SHARED)) {
+                filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);
+            }
+            uvmunmap(p->pagetable, p->vma[i].addr,
+                     PGROUNDUP(p->vma[i].length) / PGSIZE, 1);
+            fileclose(p->vma[i].fp);
+            p->vma[i].valid = VMAINVALID;
+        }
+    }
     if (p->pagetable)
         proc_freepagetable(p->pagetable, p->sz);
     p->pagetable = 0;
@@ -156,9 +167,6 @@ static void freeproc(struct proc *p) {
     p->killed = 0;
     p->xstate = 0;
     p->state = UNUSED;
-    for (int i = 0; i < VMANUM; i++) {
-        p->vma[i].valid = VMAINVALID;
-    }
 }
 
 // Create a user page table for a given process,
@@ -385,6 +393,7 @@ void exit(int status) {
             uvmunmap(p->pagetable, p->vma[i].addr,
                      PGROUNDUP(p->vma[i].length) / PGSIZE, 1);
             fileclose(p->vma[i].fp);
+            p->vma[i].valid = VMAINVALID;
         }
     }
     release(&wait_lock);
