@@ -70,7 +70,7 @@ void usertrap(void) {
         int flags = 0;
         struct vma *vma;
         for (int i = 0; i < VMANUM; i++) {
-            if (p->vma[i].addr <= addr &&
+            if (p->vma[i].valid == VMAVALID && p->vma[i].addr <= addr &&
                 p->vma[i].addr + p->vma[i].length >= addr) {
                 index = i;
                 vma = &p->vma[index];
@@ -92,24 +92,23 @@ void usertrap(void) {
         flags = flags | PTE_U | PTE_V;
         struct file *fp = vma->fp;
         struct inode *ip = fp->ip;
-        // printf("inode size is %d\n", ip->size);
+        printf("map length %d\n", PGROUNDUP(p->vma[index].length));
         while (pages < PGROUNDUP(p->vma[index].length)) {
             if ((alloc_addr = (uint64)kalloc()) == 0) {
                 panic("vma kalloc is full");
             }
             memset((void *)alloc_addr, 0, PGSIZE);
-            // printf("file %p is mmaping\n", p->vma[index].fp);
+            printf("file %p is mmaping va %p to pa %p\n", p->vma[index].fp,
+                   vma->addr + pages, alloc_addr);
             if (mappages(p->pagetable, vma->addr + pages, PGSIZE, alloc_addr,
                          flags) < 0) {
                 panic("VMA maps failure");
             }
-            // printf("allocating %p, flag: %d\n", alloc_addr, flags);
             pages += PGSIZE;
         }
         acquiresleep(&ip->lock);
         readi(ip, 1, vma->addr, 0, vma->length);
         releasesleep(&ip->lock);
-
 
     } else {
     normal_page_fault:

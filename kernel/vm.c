@@ -134,8 +134,11 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa,
     for (;;) {
         if ((pte = walk(pagetable, a, 1)) == 0)
             return -1;
-        if (*pte & PTE_V)
+        if (*pte & PTE_V) {
+            uint64 sepc = r_sepc();
+            printf("instruction %p\n", sepc);
             panic("mappages: remap");
+        }
         *pte = PA2PTE(pa) | perm | PTE_V;
         if (a == last)
             break;
