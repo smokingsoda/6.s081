@@ -142,20 +142,21 @@ found:
 // including user pages.
 // p->lock must be held.
 static void freeproc(struct proc *p) {
+    printf("proc %s is being freed\n", p->name);
     if (p->trapframe)
         kfree((void *)p->trapframe);
     p->trapframe = 0;
-    for (int i = 0; i < VMAVALID; i++) {
-        if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
-            if ((p->vma[i].flags & MAP_SHARED)) {
-                filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);
-            }
-            uvmunmap(p->pagetable, p->vma[i].addr,
-                     PGROUNDUP(p->vma[i].length) / PGSIZE, 1);
-            fileclose(p->vma[i].fp);
-            p->vma[i].valid = VMAINVALID;
-        }
-    }
+    // for (int i = 0; i < VMAVALID; i++) {
+    //     if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
+    //         if ((p->vma[i].flags & MAP_SHARED)) {
+    //             filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);
+    //         }
+    //         uvmunmap(p->pagetable, p->vma[i].addr,
+    //                  PGROUNDUP(p->vma[i].length) / PGSIZE, 1);
+    //         fileclose(p->vma[i].fp);
+    //         p->vma[i].valid = VMAINVALID;
+    //     }
+    // }
     if (p->pagetable)
         proc_freepagetable(p->pagetable, p->sz);
     p->pagetable = 0;
@@ -279,14 +280,14 @@ int fork(void) {
         int flags;
         if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
             for (int j = 0; j < p->vma[i].length; j += PGSIZE) {
-                if ((alloc_addr = (uint64)kalloc()) == 0) {
-                    panic("fork kalloc full");
-                }
                 if ((pte = walk(p->pagetable, p->vma[i].addr + j, 0)) == 0)
                     panic("fork 1");
                 if ((*pte & PTE_V) == 0) {
                     // Parent process has not accessed to this page yet
                     continue;
+                }
+                if ((alloc_addr = (uint64)kalloc()) == 0) {
+                    panic("fork kalloc full");
                 }
                 pa = PTE2PA(*pte);
                 flags = PTE_FLAGS(*pte);
@@ -359,6 +360,20 @@ void exit(int status) {
     if (p == initproc)
         panic("init exiting");
 
+    printf("vma[1] is %d\n", p->vma[1].valid);
+    for (int i = 0; i < VMAVALID; i++) {
+        if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
+            if ((p->vma[i].flags & MAP_SHARED)) {
+                filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);
+            }
+            for (int j = 0; j < p->vma[i].length; j += PGSIZE) {
+                // printf("index %d va %p unmaping\n", i, p->vma[i].addr + j);
+                uvmunmap(p->pagetable, p->vma[i].addr + j, 1, 1);
+            }
+            fileclose(p->vma[i].fp);
+            p->vma[i].valid = VMAINVALID;
+        }
+    }
     // Close all open files.
     for (int fd = 0; fd < NOFILE; fd++) {
         if (p->ofile[fd]) {
@@ -385,17 +400,6 @@ void exit(int status) {
 
     p->xstate = status;
     p->state = ZOMBIE;
-    for (int i = 0; i < VMAVALID; i++) {
-        if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
-            if ((p->vma[i].flags & MAP_SHARED)) {
-                filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);
-            }
-            uvmunmap(p->pagetable, p->vma[i].addr,
-                     PGROUNDUP(p->vma[i].length) / PGSIZE, 1);
-            fileclose(p->vma[i].fp);
-            p->vma[i].valid = VMAINVALID;
-        }
-    }
     release(&wait_lock);
 
     // Jump into the scheduler, never to return.

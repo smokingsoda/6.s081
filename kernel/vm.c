@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -135,10 +137,13 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa,
         if ((pte = walk(pagetable, a, 1)) == 0)
             return -1;
         if (*pte & PTE_V) {
-            printf("mmapages: va %p map to pa %p\n", a, pa);
+            // printf("mmapages: va %p map to pa %p\n", a, pa);
             panic("mappages: remap");
         }
         *pte = PA2PTE(pa) | perm | PTE_V;
+        if (pa == 0x0000000087f74000) {
+            // printf("mapping va %p to pa %p\n", a, pa);
+        }
         if (a == last)
             break;
         a += PGSIZE;
@@ -154,20 +159,24 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free) {
     uint64 a;
     pte_t *pte;
 
-    if ((va % PGSIZE) != 0)
+    if ((va % PGSIZE) != 0) {
         panic("uvmunmap: not aligned");
+    }
 
     for (a = va; a < va + npages * PGSIZE; a += PGSIZE) {
         if ((pte = walk(pagetable, a, 0)) == 0)
             panic("uvmunmap: walk");
         if ((*pte & PTE_V) == 0) {
-            printf("panic, va is %p, pa is %p\n", va, PTE2PA(*pte));
             panic("uvmunmap: not mapped");
         }
         if (PTE_FLAGS(*pte) == PTE_V)
             panic("uvmunmap: not a leaf");
         if (do_free) {
             uint64 pa = PTE2PA(*pte);
+            if (pa == 0x0000000087f74000) {
+                printf("proc %s unmapping va %p to pa %p\n", myproc()->name, va,
+                       pa);
+            }
             kfree((void *)pa);
         }
         *pte = 0;
