@@ -135,6 +135,7 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa,
         if ((pte = walk(pagetable, a, 1)) == 0)
             return -1;
         if (*pte & PTE_V) {
+            printf("mmapages: va %p map to pa %p\n", a, pa);
             panic("mappages: remap");
         }
         *pte = PA2PTE(pa) | perm | PTE_V;
@@ -253,6 +254,7 @@ void freewalk(pagetable_t pagetable) {
             freewalk((pagetable_t)child);
             pagetable[i] = 0;
         } else if (pte & PTE_V) {
+            printf("pa %p\n", PTE2PA(pte));
             panic("freewalk: leaf");
         }
     }

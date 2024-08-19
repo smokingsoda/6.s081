@@ -101,17 +101,18 @@ uint64 sys_mmap(void) {
     if (!p->ofile[fd]->readable && (prot & PROT_READ)) {
         return -1;
     }
-    if (!p->ofile[fd]->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED)) {
+    if (!p->ofile[fd]->writable && (prot & PROT_WRITE) &&
+        (flags & MAP_SHARED)) {
         return -1;
     }
     p->vma[index].valid = VMAVALID;
     p->vma[index].length = PGROUNDUP(length);
-    ret = p->vma[index].addr = p->sz;
-    p->vma_sz = p->vma_sz + PGROUNDUP(length);
+    ret = p->vma[index].addr = VMA_VADDR(index);
     p->vma[index].prot = prot;
-    p->ofile[fd]->ref += 1;
+    filedup(p->ofile[fd]);
     p->vma[index].fp = p->ofile[fd];
     p->vma[index].flags = flags;
+    p->vma[index].mapped = UNMAPPED;
 
     return ret;
 }
@@ -137,6 +138,11 @@ uint64 sys_munmap(void) {
     return -1;
 
 found:
+    if (p->vma[index].mapped == UNMAPPED) {
+        fileclose(p->vma[index].fp);
+        p->vma[index].valid = VMAINVALID;
+        return 0;
+    }
     if (addr == p->vma[index].addr && length == p->vma[index].length) {
         // munmap all
         if ((p->vma[index].flags & MAP_SHARED)) {
@@ -146,8 +152,7 @@ found:
             uvmunmap(p->pagetable, addr + pages, 1, 1);
             pages += PGSIZE;
         }
-        p->vma[index].fp->ref -= 1;
-        p->vma_sz -= PGROUNDUP(p->vma[index].length);
+        fileclose(p->vma[index].fp);
         p->vma[index].valid = VMAINVALID;
     } else {
         if ((p->vma[index].flags & MAP_SHARED)) {
@@ -157,7 +162,6 @@ found:
             uvmunmap(p->pagetable, addr + pages, 1, 1);
             pages += PGSIZE;
         }
-        p->vma_sz -= PGROUNDUP(length);
         p->vma[index].length -= PGROUNDUP(length);
         if (addr == p->vma[index].addr) {
             p->vma[index].addr = p->vma[index].addr + PGROUNDUP(length);

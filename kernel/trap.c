@@ -70,7 +70,8 @@ void usertrap(void) {
         int flags = 0;
         struct vma *vma;
         for (int i = 0; i < VMANUM; i++) {
-            if (p->vma[i].valid == VMAVALID && p->vma[i].addr <= addr &&
+            if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == UNMAPPED &&
+                p->vma[i].addr <= addr &&
                 p->vma[i].addr + p->vma[i].length > addr) {
                 index = i;
                 vma = &p->vma[index];
@@ -106,6 +107,7 @@ void usertrap(void) {
         acquiresleep(&ip->lock);
         readi(ip, 1, vma->addr, 0, vma->length);
         releasesleep(&ip->lock);
+        vma->mapped = MAPPED;
 
     } else {
     normal_page_fault:

@@ -83,10 +83,18 @@ struct trapframe {
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 #define VMANUM 16
+#define VMASZ 20
 #define VMAVALID 1
 #define VMAINVALID 0
+#define VMA_VADDR(index) (TRAPFRAME - VMASZ * (index + 1) * PGSIZE)
+#define MAPPED 1
+#define UNMAPPED 0
+
+
+
 struct vma {
     uint valid;
+    uint mapped;
     int length;
     uint64 addr;
     int prot;
@@ -118,5 +126,4 @@ struct proc {
     struct inode *cwd;           // Current directory
     char name[16];               // Process name (debugging)
     struct vma vma[VMANUM];
-    uint64 vma_sz;
 };

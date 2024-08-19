@@ -156,7 +156,6 @@ static void freeproc(struct proc *p) {
     p->killed = 0;
     p->xstate = 0;
     p->state = UNUSED;
-    p->vma_sz = 0;
     for (int i = 0; i < VMANUM; i++) {
         p->vma[i].valid = VMAINVALID;
     }
@@ -265,35 +264,31 @@ int fork(void) {
     }
 
     for (int i = 0; i < VMANUM; i++) {
-        np->vma[i].valid = p->vma[i].valid;
-        np->vma[i].addr = p->vma[i].addr;
-        np->vma[i].flags = p->vma[i].flags;
-        np->vma[i].fp = p->vma[i].fp;
-        np->vma[i].length = p->vma[i].length;
-        np->vma[i].prot = p->vma[i].prot;
+        memmove(&np->vma[i], &p->vma[i], sizeof(struct vma));
         uint64 alloc_addr;
         pte_t *pte;
         uint64 pa;
         int flags;
-        if (p->vma[i].valid == VMAVALID) {
+        if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
             for (int j = 0; j < p->vma[i].length; j += PGSIZE) {
                 if ((alloc_addr = (uint64)kalloc()) == 0) {
                     panic("fork kalloc full");
                 }
-                if ((pte = walk(p->pagetable, i, 0)) == 0)
+                if ((pte = walk(p->pagetable, p->vma[i].addr + j, 0)) == 0)
                     panic("fork 1");
                 if ((*pte & PTE_V) == 0) {
-                    panic("fork 2");
+                    // Parent process has not accessed to this page yet
+                    continue;
                 }
                 pa = PTE2PA(*pte);
                 flags = PTE_FLAGS(*pte);
                 memmove((void *)alloc_addr, (void *)pa, PGSIZE);
-                if (mappages(p->pagetable, np->vma[i].addr + j, PGSIZE,
+                if (mappages(np->pagetable, np->vma[i].addr + j, PGSIZE,
                              alloc_addr, flags) < 0) {
                     panic("VMA maps failure");
                 }
             }
-            np->vma[i].fp->ref += 1;
+            filedup(np->vma[i].fp);
         }
     }
 
@@ -304,7 +299,6 @@ int fork(void) {
         return -1;
     }
     np->sz = p->sz;
-    np->vma_sz = p->vma_sz;
 
     // copy saved user registers.
     *(np->trapframe) = *(p->trapframe);
@@ -384,9 +378,13 @@ void exit(int status) {
     p->xstate = status;
     p->state = ZOMBIE;
     for (int i = 0; i < VMAVALID; i++) {
-        if (p->vma[i].valid == VMAVALID) {
+        if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
+            if ((p->vma[i].flags & MAP_SHARED)) {
+                filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);
+            }
             uvmunmap(p->pagetable, p->vma[i].addr,
                      PGROUNDUP(p->vma[i].length) / PGSIZE, 1);
+            fileclose(p->vma[i].fp);
         }
     }
     release(&wait_lock);
