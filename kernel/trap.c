@@ -93,17 +93,17 @@ void usertrap(void) {
         struct file *fp = vma->fp;
         struct inode *ip = fp->ip;
         // printf("inode size is %d\n", ip->size);
-        while (pages < p->vma[index].length) {
+        while (pages < PGROUNDUP(p->vma[index].length)) {
             if ((alloc_addr = (uint64)kalloc()) == 0) {
                 panic("vma kalloc is full");
             }
             memset((void *)alloc_addr, 0, PGSIZE);
-            printf("file %p is mmaping\n", p->vma[index].fp);
+            // printf("file %p is mmaping\n", p->vma[index].fp);
             if (mappages(p->pagetable, vma->addr + pages, PGSIZE, alloc_addr,
                          flags) < 0) {
                 panic("VMA maps failure");
             }
-            printf("allocating %p, flag: %d\n", alloc_addr, flags);
+            // printf("allocating %p, flag: %d\n", alloc_addr, flags);
             pages += PGSIZE;
         }
         int a;

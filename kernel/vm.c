@@ -132,17 +132,10 @@ int mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa,
     a = PGROUNDDOWN(va);
     last = PGROUNDDOWN(va + size - 1);
     for (;;) {
-        // printf("pa %p mapping to va %p\n", pa, a);
-
         if ((pte = walk(pagetable, a, 1)) == 0)
             return -1;
-        if (pa == 0x0000000087f75000) {
-            printf("map pte is %p\n", *pte);
-        }
-        if (*pte & PTE_V) {
-            printf("pa %p remapping to va %p\n", pa, a);
+        if (*pte & PTE_V)
             panic("mappages: remap");
-        }
         *pte = PA2PTE(pa) | perm | PTE_V;
         if (a == last)
             break;
@@ -165,20 +158,15 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free) {
     for (a = va; a < va + npages * PGSIZE; a += PGSIZE) {
         if ((pte = walk(pagetable, a, 0)) == 0)
             panic("uvmunmap: walk");
-        if ((*pte & PTE_V) == 0)
+        if ((*pte & PTE_V) == 0) {
+            printf("panic, va is %p, pa is %p\n", va, PTE2PA(*pte));
             panic("uvmunmap: not mapped");
+        }
         if (PTE_FLAGS(*pte) == PTE_V)
             panic("uvmunmap: not a leaf");
         if (do_free) {
             uint64 pa = PTE2PA(*pte);
-            if (pa == 0x0000000087f75000) {
-                printf("unmap pte is %p\n", *pte);
-                *pte = 0;
-                printf("now pte is %p\n", *pte);
-            }
-
             kfree((void *)pa);
-            printf("pa %p unmapping to va %p\n", pa, a);
         }
         *pte = 0;
     }
