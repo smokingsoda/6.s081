@@ -142,7 +142,6 @@ found:
 // including user pages.
 // p->lock must be held.
 static void freeproc(struct proc *p) {
-    printf("proc %s is being freed\n", p->name);
     if (p->trapframe)
         kfree((void *)p->trapframe);
     p->trapframe = 0;
@@ -360,8 +359,7 @@ void exit(int status) {
     if (p == initproc)
         panic("init exiting");
 
-    printf("vma[1] is %d\n", p->vma[1].valid);
-    for (int i = 0; i < VMAVALID; i++) {
+    for (int i = 0; i < VMANUM; i++) {
         if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == MAPPED) {
             if ((p->vma[i].flags & MAP_SHARED)) {
                 filewrite(p->vma[i].fp, p->vma[i].addr, p->vma[i].length);

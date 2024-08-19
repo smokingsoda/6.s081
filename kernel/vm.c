@@ -173,10 +173,6 @@ void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free) {
             panic("uvmunmap: not a leaf");
         if (do_free) {
             uint64 pa = PTE2PA(*pte);
-            if (pa == 0x0000000087f74000) {
-                printf("proc %s unmapping va %p to pa %p\n", myproc()->name, va,
-                       pa);
-            }
             kfree((void *)pa);
         }
         *pte = 0;
