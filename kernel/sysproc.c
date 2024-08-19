@@ -140,7 +140,7 @@ uint64 sys_munmap(void) {
 found:
     // printf("addr: %p, vma addr: %p\n", addr, p->vma[index].addr);
     // printf("length: %p, vma length: %p\n", length, p->vma[index].length);
-    if (length == p->vma[index].length) {
+    if (addr == p->vma[index].addr && length == p->vma[index].length) {
         // munmap all
         if ((p->vma[index].flags & MAP_SHARED)) {
             filewrite(p->vma[index].fp, addr, length);
@@ -169,6 +169,11 @@ found:
         }
         p->sz -= PGROUNDUP(length);
         p->vma[index].length -= PGROUNDUP(length);
+        if (addr == p->vma[index].addr) {
+            addr = p->vma[index].addr + PGROUNDUP(length);
+        } else {
+            addr = addr;
+        }
         printf("incomplete unmap, left length is %d pages\n",
                p->vma[index].length / PGSIZE);
     }
