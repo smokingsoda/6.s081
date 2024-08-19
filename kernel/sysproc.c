@@ -128,7 +128,7 @@ uint64 sys_munmap(void) {
     int index;
     struct proc *p = myproc();
     for (int i = 0; i < VMANUM; i++) {
-        if (p->vma->valid == VMAVALID && p->vma[i].addr <= addr &&
+        if (p->vma[i].valid == VMAVALID && p->vma[i].addr <= addr &&
             p->vma[i].addr + p->vma[i].length > addr &&
             length <= p->vma[i].length) {
             index = i;
@@ -140,14 +140,18 @@ uint64 sys_munmap(void) {
 found:
     // printf("addr: %p, vma addr: %p\n", addr, p->vma[index].addr);
     // printf("length: %p, vma length: %p\n", length, p->vma[index].length);
-    if (addr == p->vma[index].addr && length == p->vma[index].length) {
+    if (length == p->vma[index].length) {
         // munmap all
         if ((p->vma[index].flags & MAP_SHARED)) {
             filewrite(p->vma[index].fp, addr, length);
             // printf("length: %d written: %d\n", length, written);
         }
-        printf("unmap from va %p, %d page\n", addr, PGROUNDUP(length) / PGSIZE);
-        uvmunmap(p->pagetable, addr, PGROUNDUP(length) / PGSIZE, 1);
+        while (pages < PGROUNDUP(length)) {
+            printf("unmap from va %p, %d page\n", addr,
+                   PGROUNDUP(length) / PGSIZE);
+            uvmunmap(p->pagetable, addr + pages, 1, 1);
+            pages += PGSIZE;
+        }
         p->vma[index].fp->ref -= 1;
         p->sz -= PGROUNDUP(p->vma[index].length);
         p->vma[index].valid = VMAINVALID;
