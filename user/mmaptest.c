@@ -215,10 +215,8 @@ void mmap_test(void) {
         err("mmap mmap2");
     close(fd2);
     unlink("mmap2");
-    printf("p1 %p\n", p1);
     if (memcmp(p1, "12345", 5) != 0)
         err("mmap1 mismatch");
-    printf("p2 %p\n", p2);
     if (memcmp(p2, "67890", 5) != 0)
         err("mmap2 mismatch");
 

@@ -98,17 +98,16 @@ uint64 sys_mmap(void) {
             break;
         }
     }
-    if (!p->ofile[fd]->readable) {
+    if (!p->ofile[fd]->readable && (prot & PROT_READ)) {
         return -1;
     }
-    if (p->ofile[fd]->readable && !p->ofile[fd]->writable &&
-        (flags & MAP_SHARED)) {
+    if (!p->ofile[fd]->writable && (prot & PROT_WRITE) && (flags & MAP_SHARED)) {
         return -1;
     }
     p->vma[index].valid = VMAVALID;
     p->vma[index].length = PGROUNDUP(length);
     ret = p->vma[index].addr = p->sz;
-    p->sz = p->sz + PGROUNDUP(length);
+    p->vma_sz = p->vma_sz + PGROUNDUP(length);
     p->vma[index].prot = prot;
     p->ofile[fd]->ref += 1;
     p->vma[index].fp = p->ofile[fd];
@@ -128,10 +127,6 @@ uint64 sys_munmap(void) {
     int index;
     struct proc *p = myproc();
     for (int i = 0; i < VMANUM; i++) {
-        if (p->vma[i].valid == VMAVALID) {
-            printf("i: %d, addr: %p, vaddr: %p, l: %d, vl: %d\n", i, addr,
-                   p->vma[i].addr, length, p->vma[i].length);
-        }
         if (p->vma[i].valid == VMAVALID && p->vma[i].addr <= addr &&
             p->vma[i].addr + p->vma[i].length > addr &&
             length <= p->vma[i].length) {
@@ -152,7 +147,7 @@ found:
             pages += PGSIZE;
         }
         p->vma[index].fp->ref -= 1;
-        p->sz -= PGROUNDUP(p->vma[index].length);
+        p->vma_sz -= PGROUNDUP(p->vma[index].length);
         p->vma[index].valid = VMAINVALID;
     } else {
         if ((p->vma[index].flags & MAP_SHARED)) {
@@ -162,7 +157,7 @@ found:
             uvmunmap(p->pagetable, addr + pages, 1, 1);
             pages += PGSIZE;
         }
-        p->sz -= PGROUNDUP(length);
+        p->vma_sz -= PGROUNDUP(length);
         p->vma[index].length -= PGROUNDUP(length);
         if (addr == p->vma[index].addr) {
             p->vma[index].addr = p->vma[index].addr + PGROUNDUP(length);
