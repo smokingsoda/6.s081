@@ -69,11 +69,16 @@ void usertrap(void) {
         uint64 pages = 0;
         int flags = 0;
         struct vma *vma;
-        for (int i = 0; i < VMANUM; i++) {
-            if (p->vma[i].valid == VMAVALID && p->vma[i].mapped == UNMAPPED &&
-                p->vma[i].addr <= addr &&
-                p->vma[i].addr + p->vma[i].length > addr) {
-                index = i;
+        // Use math method
+        uint64 offset = TRAPFRAME - addr;
+        if (offset > 0 && offset <= VMANUM * VMASZ * PGSIZE) {
+            uint64 vma_index = (offset - 1) / (VMASZ * PGSIZE);
+            if (vma_index < VMANUM && 
+                p->vma[vma_index].valid == VMAVALID &&
+                p->vma[vma_index].mapped == UNMAPPED &&
+                p->vma[vma_index].addr <= addr &&
+                p->vma[vma_index].addr + p->vma[vma_index].length > addr) {
+                index = vma_index;
                 vma = &p->vma[index];
                 goto vma_page_fault;
             }
